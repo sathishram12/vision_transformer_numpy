@@ -4,7 +4,7 @@ import sys
 import copy
 from typing import Tuple
 
-import numpy as np
+import cupy as cpy
 from optimizer import Optimizer
 
 
@@ -17,8 +17,8 @@ class LayerNormalization:
 
         self.epsilon = epsilon
 
-        self.gamma = np.ones(self.normalized_shape)
-        self.beta = np.zeros(self.normalized_shape)
+        self.gamma = cpy.ones(self.normalized_shape)
+        self.beta = cpy.zeros(self.normalized_shape)
 
         self.mean = None
         self.var = None
@@ -35,7 +35,7 @@ class LayerNormalization:
         self.optimizer_w = copy.deepcopy(optimizer)
         self.optimizer_b = copy.deepcopy(optimizer)
 
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: cpy.ndarray) -> cpy.ndarray:
         """Forward propagation.
 
         Args:
@@ -45,15 +45,15 @@ class LayerNormalization:
             computed linear layer output.
         """
         self.input_data = x
-        self.mean = np.mean(self.input_data, axis=-1, keepdims=True)
-        self.var = np.var(self.input_data, axis=-1, keepdims=True)
+        self.mean = cpy.mean(self.input_data, axis=-1, keepdims=True)
+        self.var = cpy.var(self.input_data, axis=-1, keepdims=True)
         self.x_centered = self.input_data - self.mean
-        self.stddev_inv = 1 / np.sqrt(self.var + self.epsilon)
+        self.stddev_inv = 1 / cpy.sqrt(self.var + self.epsilon)
         self.x_hat = self.x_centered * self.stddev_inv
         self.output_data = self.gamma * self.x_hat + self.beta
         return self.output_data
 
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: cpy.ndarray) -> cpy.ndarray:
         """Defining __call__ method to enable function like call.
 
         Args:
@@ -64,7 +64,7 @@ class LayerNormalization:
         """
         return self.forward(x)
 
-    def backward(self, error: np.ndarray) -> np.ndarray:
+    def backward(self, error: cpy.ndarray) -> cpy.ndarray:
         """Backward propagation.
 
         Args:
@@ -74,9 +74,9 @@ class LayerNormalization:
             the gradients w.r.t. the input.
         """
         self.normalized_axis = tuple(range(self.input_data.ndim - 1))
-        dx_hat = error * self.gamma[np.newaxis, np.newaxis, :]
-        dvar = np.sum(dx_hat * self.x_centered, axis=-1, keepdims=True) * -0.5 * self.stddev_inv**3
-        dmu = np.sum(dx_hat * -self.stddev_inv, axis=-1, keepdims=True) + dvar * np.mean(
+        dx_hat = error * self.gamma[cpy.newaxis, cpy.newaxis, :]
+        dvar = cpy.sum(dx_hat * self.x_centered, axis=-1, keepdims=True) * -0.5 * self.stddev_inv**3
+        dmu = cpy.sum(dx_hat * -self.stddev_inv, axis=-1, keepdims=True) + dvar * cpy.mean(
             -2.0 * self.x_centered, axis=-1, keepdims=True
         )
 
@@ -86,8 +86,8 @@ class LayerNormalization:
             + (dmu / self.normalized_shape)
         )
 
-        self.grad_gamma = np.sum(error * self.x_hat, axis=self.normalized_axis)
-        self.grad_beta = np.sum(error, axis=self.normalized_axis)
+        self.grad_gamma = cpy.sum(error * self.x_hat, axis=self.normalized_axis)
+        self.grad_beta = cpy.sum(error, axis=self.normalized_axis)
 
         return output_error
 
@@ -96,10 +96,17 @@ class LayerNormalization:
         self.gamma = self.optimizer_w.update(self.grad_gamma, self.gamma)
         self.beta = self.optimizer_b.update(self.grad_beta, self.beta)
 
-    def get_grads(self) -> Tuple[np.ndarray, np.ndarray]:
+    def get_grads(self) -> Tuple[cpy.ndarray, cpy.ndarray]:
         """Access gradients.used for testing.
 
         Returns:
             returns gradients
         """
         return self.grad_gamma, self.grad_beta
+    
+    def get_weights(self):
+        return {"gamma": cpy.asnumpy(self.gamma), "beta": cpy.asnumpy(self.beta)}
+
+    def set_weights(self, weights):
+        self.gamma = cpy.array(weights["gamma"])
+        self.beta = cpy.array(weights["beta"])

@@ -1,3 +1,4 @@
+import cupy as cpy
 import numpy as np
 from linear import Linear
 from parameter import Parameter
@@ -26,12 +27,12 @@ class ViT:
         self.input_d = int(chw[0] * self.patch_size[0] * self.patch_size[1])
         self.hidden_d = hidden_d
         self.linear_mapper = Linear(self.input_d, self.hidden_d)
-        self.class_token = Parameter(np.random.rand(1, self.hidden_d))
+        self.class_token = Parameter(cpy.random.rand(1, self.hidden_d))
         self.pos_embed = get_positional_embeddings(self.n_patches**2 + 1, self.hidden_d)
         self.blocks = [ViTBlock(hidden_d, n_heads) for _ in range(num_blocks)]
         self.mlp = Linear(self.hidden_d, out_classses)
 
-    def forward(self, images: np.ndarray) -> np.ndarray:
+    def forward(self, images: cpy.ndarray) -> cpy.ndarray:
         """Forward propagation.
 
         Args:
@@ -42,8 +43,7 @@ class ViT:
         """
         patches = convert_image_to_patches(images, self.n_patches)
         tokens = self.linear_mapper(patches)
-        print(tokens)
-        out = np.stack([np.vstack((self.class_token.val, tokens[i])) for i in range(len(tokens))])
+        out = cpy.stack([cpy.vstack((self.class_token.val, tokens[i])) for i in range(len(tokens))])
         out = out + self.pos_embed
         for block in self.blocks:
             out = block.forward(out)
@@ -62,7 +62,7 @@ class ViT:
         self.mlp.set_optimizer(optimizer_algo)
         self.class_token.set_optimizer(optimizer_algo)
 
-    def backward(self, error: np.ndarray) -> np.ndarray:
+    def backward(self, error: cpy.ndarray) -> cpy.ndarray:
         """Backward propagation.
 
         Args:
@@ -86,3 +86,34 @@ class ViT:
             block.update_weights()
         self.linear_mapper.update_weights()
         self.class_token.update_weights()
+    
+    def save_weights(self, filepath: str) -> None:
+        """Save weights to a file.
+
+        Args:
+            filepath: Path to save the weights.
+        """
+        weights = {
+            "linear_mapper": self.linear_mapper.get_weights(),
+            "class_token": self.class_token.val,
+            "pos_embed": self.pos_embed,
+            "blocks": [block.get_weights() for block in self.blocks],
+            "mlp": self.mlp.get_weights()
+        }
+        np.save(filepath, weights)
+        print(f"Weights saved to {filepath}")
+
+    def load_weights(self, filepath: str) -> None:
+        """Load weights from a file.
+
+        Args:
+            filepath: Path to load the weights.
+        """
+        weights = np.load(filepath, allow_pickle=True).item()
+        self.linear_mapper.set_weights(weights["linear_mapper"])
+        self.class_token.val = weights["class_token"]
+        self.pos_embed = weights["pos_embed"]
+        for block, block_weights in zip(self.blocks, weights["blocks"]):
+            block.set_weights(block_weights)
+        self.mlp.set_weights(weights["mlp"])
+        print(f"Weights loaded from {filepath}")

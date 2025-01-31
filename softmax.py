@@ -1,4 +1,4 @@
-import numpy as np
+import cupy as cpy
 
 
 class Softmax:
@@ -8,7 +8,7 @@ class Softmax:
         """Initialize."""
         self.cache = dict(output=None)
 
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: cpy.ndarray) -> cpy.ndarray:
         """Forward propagation.
 
         Args:
@@ -17,12 +17,13 @@ class Softmax:
         Returns:
             computed softmax output.
         """
-        max_val = np.max(x, axis=-1)[:, None]  # for numerical stability
-        y = np.exp(x - max_val) / np.sum(np.exp(x - max_val), axis=-1, keepdims=True)
+        max_val = cpy.max(x, axis=-1, keepdims=True)  # Keep dimensions consistent
+        exp_vals = cpy.exp(x - max_val)  # Subtract max for numerical stability
+        y = exp_vals / cpy.sum(exp_vals, axis=-1, keepdims=True)
         self.cache = dict(output=y)
         return y
 
-    def backward(self, grad: np.ndarray) -> np.ndarray:
+    def backward(self, grad: cpy.ndarray) -> cpy.ndarray:
         """Backward propagation.
 
         Args:
@@ -36,18 +37,19 @@ class Softmax:
         # fails
         # return softmax * (grad -(grad * softmax).sum(axis=1)[:,None])
         # ref - https://github.com/AkiRusProd/numpy-transformer/blob/master/transformer/activations.py
-        J = softmax[..., np.newaxis] * np.tile(
-            np.identity(softmax.shape[-1]), (softmax.shape[0], *tuple(np.ones(softmax.ndim, dtype=np.int8).tolist()))
+        J = softmax[..., cpy.newaxis] * cpy.tile(
+            cpy.identity(softmax.shape[-1]), (softmax.shape[0], *tuple(cpy.ones(softmax.ndim, dtype=cpy.int8).tolist()))
         ) - (
-            softmax[..., np.newaxis, :].transpose(
-                *tuple(np.arange(0, softmax.ndim - 1, 1, dtype=np.int8).tolist()), -1, -2
+            softmax[..., cpy.newaxis, :].transpose(
+                *tuple(cpy.arange(0, softmax.ndim - 1, 1, dtype=cpy.int8).tolist()), -1, -2
             )
-            @ softmax[..., np.newaxis, :]
+            @ softmax[..., cpy.newaxis, :]
         )
-        input_grad = grad[..., np.newaxis, :] @ J
+        input_grad = grad[..., cpy.newaxis, :] @ J
         return input_grad.reshape(grad.shape)
 
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+
+    def __call__(self, x: cpy.ndarray) -> cpy.ndarray:
         """Defining __call__ method to enable function like call.
 
         Args:

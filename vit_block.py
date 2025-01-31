@@ -1,4 +1,4 @@
-import numpy as np
+import cupy as cpy
 from gelu import GELU
 from layer_normalization import LayerNormalization
 from linear import Linear
@@ -27,7 +27,7 @@ class ViTBlock:
         self.cache = dict(input=None)
         self.optimizer = None
 
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: cpy.ndarray) -> cpy.ndarray:
         """Forward propagation.
 
         Args:
@@ -46,7 +46,7 @@ class ViTBlock:
         out = out + stage_1_out
         return out
 
-    def backward(self, grad: np.ndarray) -> np.ndarray:
+    def backward(self, grad: cpy.ndarray) -> cpy.ndarray:
         """Backward propagation.
 
         Args:
@@ -59,7 +59,7 @@ class ViTBlock:
         if grad.shape != x.shape:
             # needed for last block since only cls continues trimming of cls happens outside
             # however since x is accessible this is included here
-            grad_in = np.zeros(x.shape)
+            grad_in = cpy.zeros(x.shape)
             grad_in[:, 0] = grad
         else:
             grad_in = grad
@@ -94,3 +94,24 @@ class ViTBlock:
         self.mha.update_weights()
         self.mlp_1.update_weights()
         self.mlp_2.update_weights()
+    
+    def get_weights(self) -> dict:
+        weights = {}
+
+        # Add weights from all components
+        weights["layer_norm_1"] = self.layer_norm_1.get_weights()
+        weights["layer_norm_2"] = self.layer_norm_2.get_weights()
+        weights["mha"] = self.mha.get_weights()
+        weights["mlp_1"] = self.mlp_1.get_weights()
+        weights["mlp_2"] = self.mlp_2.get_weights()
+
+        return {"ViTweights": weights}
+    
+    def set_weights(self, weights) -> None:
+        # Load weights for all components
+        data = weights["ViTweights"]
+        self.layer_norm_1.set_weights(data["layer_norm_1"])
+        self.layer_norm_2.set_weights(data["layer_norm_2"])
+        self.mha.set_weights(data["mha"])
+        self.mlp_1.set_weights(data["mlp_1"])
+        self.mlp_2.set_weights(data["mlp_2"])

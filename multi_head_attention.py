@@ -1,6 +1,6 @@
 import sys
 
-import numpy as np
+import cupy as cpy
 from linear import Linear
 from softmax import Softmax
 
@@ -23,7 +23,7 @@ class MultiHeadAttention:
         self.v_mappings = [Linear(self.d_head, self.d_head) for _ in range(self.n_heads)]
         self.softmax = [Softmax() for _ in range(self.n_heads)]
 
-    def forward(self, sequences: np.ndarray) -> np.ndarray:
+    def forward(self, sequences: cpy.ndarray) -> cpy.ndarray:
         """Forward propagation.
 
         Args:
@@ -33,9 +33,9 @@ class MultiHeadAttention:
             computed multi head attention layer output.
         """
         self.sequences = sequences
-        self.scale = np.sqrt(self.d_head)
+        self.scale = cpy.sqrt(self.d_head)
         # convert to list of n_heads elements with info of size (N, seq_length, dimension / n_heads)
-        sequences = np.split(sequences, self.n_heads, axis=-1)
+        sequences = cpy.split(sequences, self.n_heads, axis=-1)
         result = []
         q_seq = []
         k_seq = []
@@ -54,14 +54,14 @@ class MultiHeadAttention:
             attention_seq.append(attention_seq_head)
             result.append(attention_seq_head @ v)
         # convert to (N, seq_length, dimension)
-        self.result = np.dstack(result)
-        self.q_seqs = np.dstack(q_seq)
-        self.k_seqs = np.dstack(k_seq)
-        self.v_seqs = np.dstack(v_seq)
-        self.attention_seqs = np.dstack(attention_seq)
+        self.result = cpy.dstack(result)
+        self.q_seqs = cpy.dstack(q_seq)
+        self.k_seqs = cpy.dstack(k_seq)
+        self.v_seqs = cpy.dstack(v_seq)
+        self.attention_seqs = cpy.dstack(attention_seq)
         return self.result
 
-    def backward(self, error: np.ndarray) -> None:
+    def backward(self, error: cpy.ndarray) -> None:
         """Backward propagation..
 
         Args:
@@ -70,11 +70,11 @@ class MultiHeadAttention:
         Returns:
             the gradients w.r.t. the input.
         """
-        error_head_split = np.split(error, self.n_heads, axis=-1)
-        attention_seqs_split = np.split(self.attention_seqs, self.n_heads, axis=-1)
-        q_seqs_split = np.split(self.q_seqs, self.n_heads, axis=-1)
-        k_seqs_split = np.split(self.k_seqs, self.n_heads, axis=-1)
-        v_seqs_split = np.split(self.v_seqs, self.n_heads, axis=-1)
+        error_head_split = cpy.split(error, self.n_heads, axis=-1)
+        attention_seqs_split = cpy.split(self.attention_seqs, self.n_heads, axis=-1)
+        q_seqs_split = cpy.split(self.q_seqs, self.n_heads, axis=-1)
+        k_seqs_split = cpy.split(self.k_seqs, self.n_heads, axis=-1)
+        v_seqs_split = cpy.split(self.v_seqs, self.n_heads, axis=-1)
 
         final_error = []
         for i in range(self.n_heads):
@@ -92,7 +92,7 @@ class MultiHeadAttention:
 
             seq_error = error_q_out_i + error_k_out_i + error_v_out_i
             final_error.append(seq_error)
-        return np.dstack(final_error)
+        return cpy.dstack(final_error)
 
     def set_optimizer(self, optimizer: object) -> None:
         """Set optimizer.
@@ -115,3 +115,21 @@ class MultiHeadAttention:
             q_mapping.update_weights()
         for k_mapping in self.k_mappings:
             k_mapping.update_weights()
+    
+    def get_weights(self):
+        """Get weights of the MultiHeadAttention module."""
+        weights = {
+            "q_mappings": [q_mapping.get_weights() for q_mapping in self.q_mappings],
+            "k_mappings": [k_mapping.get_weights() for k_mapping in self.k_mappings],
+            "v_mappings": [v_mapping.get_weights() for v_mapping in self.v_mappings],
+        }
+        return weights
+
+    def set_weights(self, weights):
+        """Set weights for the MultiHeadAttention module."""
+        for i, q_mapping_weights in enumerate(weights["q_mappings"]):
+            self.q_mappings[i].set_weights(q_mapping_weights)
+        for i, k_mapping_weights in enumerate(weights["k_mappings"]):
+            self.k_mappings[i].set_weights(k_mapping_weights)
+        for i, v_mapping_weights in enumerate(weights["v_mappings"]):
+            self.v_mappings[i].set_weights(v_mapping_weights)

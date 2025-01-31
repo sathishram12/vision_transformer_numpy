@@ -1,13 +1,14 @@
 import argparse
 import os
 
-import numpy as np
+import cupy as cpy
 from cross_entropy_loss import CrossEntropyLoss
 from optimizer import Adam
 from vit import ViT
 import tqdm
 
 
+cpy.cuda.Device(0).use()
 class ViTNumPy:
     """VIT implementation Wrapper."""
 
@@ -31,7 +32,7 @@ class ViTNumPy:
         self.output = output
         self.load_dataset_from_file(path_to_mnist)
 
-    def datafeeder(self, x: np.ndarray, y: np.ndarray, shuffle:bool = False):
+    def datafeeder(self, x: cpy.ndarray, y: cpy.ndarray, shuffle:bool = False):
         """Datafeeder for train test.
 
         Args:
@@ -43,8 +44,8 @@ class ViTNumPy:
             a batch of data
         """
         if shuffle:
-            randomize = np.arange(len(y))
-            np.random.shuffle(randomize)
+            randomize = cpy.arange(len(y))
+            cpy.random.shuffle(randomize)
             x = x[:,randomize]
             y = y[randomize]
         for i in range(0, len(y), self.batch_size):
@@ -57,12 +58,12 @@ class ViTNumPy:
             path_to_mnist: path to folder containing mnist.
         """
         with open(os.path.join(path_to_mnist, "mnist_train.npy"), "rb") as f:
-            self.x_train = np.load(f)
-            self.y_train = np.load(f)
+            self.x_train = cpy.load(f)
+            self.y_train = cpy.load(f)
 
         with open(os.path.join(path_to_mnist, "mnist_test.npy"), "rb") as f:
-            self.x_test = np.load(f)
-            self.y_test = np.load(f)
+            self.x_test = cpy.load(f)
+            self.y_test = cpy.load(f)
 
     def train_iter(self) -> None:
         """Train model for one epoch."""
@@ -73,16 +74,13 @@ class ViTNumPy:
             x, y = batch
             x = x.transpose(1, 0)
             x = x.reshape(self.batch_size, 1, 28, 28)
-            print(y,end=":")
             y_hat = self.model.forward(x)
-            print(y_hat)
             loss = self.loss_function.forward(y_hat, y)
             error = self.loss_function.backward()
             self.model.backward(error)
             self.model.update_weights()
-            print(loss)
             train_error.append(loss)
-        print(np.mean(np.asarray(train_error)))
+        print("Train-error:"+str(cpy.mean(cpy.asarray(train_error))))
 
     def test_iter(self) -> None:
         """Test model."""
@@ -94,16 +92,17 @@ class ViTNumPy:
         for batch in tqdm.tqdm(test_dataloader, total = total_len):
             x, y = batch
             x = x.transpose(1, 0)
-            x = x.reshape(self.batch_size, 1, 28, 28)
+            batch_size = x.shape[0]
+            x = x.reshape(batch_size, 1, 28, 28)
             y_hat = self.model.forward(x)
             loss = self.loss_function.forward(y_hat, y)
-            y_pred = np.argmax(y_hat, axis=-1)
-            correct = np.sum(y_pred == y)
-            total = np.size(y)
+            y_pred = cpy.argmax(y_hat, axis=-1)
+            correct = cpy.sum(y_pred == y)
+            total = cpy.size(y)
             epoch_tp += correct
             epoch_total += total
             test_error.append(loss)
-        print("test error", np.mean(np.asarray(test_error)))
+        print("test error", cpy.mean(cpy.asarray(test_error)))
         print("test acc", epoch_tp / epoch_total)
 
     def train_model(self) -> None:
@@ -117,6 +116,16 @@ class ViTNumPy:
             self.train_iter()
             if epoch % self.test_epoch_interval == 0:
                 self.test_iter()
+                self.model.save_weights("vit_weights.npy")
+    
+    def load_and_test_model(self, weights_file_path="vit_weights.npy") -> None:
+        """Load model weights and validate"""
+        self.model = ViT(chw=(1, 28, 28), n_patches=7, hidden_d=self.hidden_dimension, 
+                        n_heads=self.heads, num_blocks=self.layers, out_classses=self.output)
+        self.loss_function = CrossEntropyLoss()
+        self.model.load_weights(weights_file_path)
+        self.test_iter()
+        
 
 
 def parse_args():
@@ -132,7 +141,7 @@ def parse_args():
     parser.add_argument('--heads', required=False, default= 8)
     parser.add_argument('--layers', required=False, default= 6)
     parser.add_argument('--output', required=False, default=10)
-    parser.add_argument("--batch_size", dest="batch_size", required=False, default=1)
+    parser.add_argument("--batch_size", dest="batch_size", required=False, default=32)
     parser.add_argument("--epochs", dest="epochs", required=False, default=10)
     parser.add_argument("--test_epoch_interval", dest="test_epoch_interval", required=False, default=2)
     args = parser.parse_args()
@@ -145,4 +154,5 @@ if __name__ == "__main__":
             hidden_dimension, heads, layers, output = parse_args()
     vit_mnist = ViTNumPy(path_to_mnist, batch_size, epochs, test_epoch_interval, 
                          hidden_dimension, heads, layers, output)
-    vit_mnist.train_model()
+    #vit_mnist.train_model()
+    vit_mnist.load_and_test_model()

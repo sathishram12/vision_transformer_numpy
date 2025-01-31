@@ -2,7 +2,7 @@ import copy
 import sys
 from typing import Tuple
 
-import numpy as np
+import cupy as cpy
 
 
 from optimizer import Optimizer
@@ -21,9 +21,9 @@ class Linear:
         """
         self.in_features_size = in_features_size
         # in general w is defined as [out_features_size, in_features_size] however used the opp.
-        self.w = np.zeros([in_features_size, out_features_size])
+        self.w = cpy.zeros([in_features_size, out_features_size])
         if bias:
-            self.b = np.zeros([out_features_size])
+            self.b = cpy.zeros([out_features_size])
         else:
             self.b = None
         self.cache = dict(input=None)
@@ -33,12 +33,12 @@ class Linear:
 
     def set_parameters(self) -> None:
         """Set parameters."""
-        stdv = 1.0 / np.sqrt(self.in_features_size)
-        self.w = np.random.uniform(-stdv, stdv, self.w.shape)
+        stdv = 1.0 / cpy.sqrt(self.in_features_size)
+        self.w = cpy.random.uniform(-stdv, stdv, self.w.shape)
         if self.b is not None:
-            self.b = np.random.uniform(-stdv, stdv, self.b.shape)
+            self.b = cpy.random.uniform(-stdv, stdv, self.b.shape)
 
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: cpy.ndarray) -> cpy.ndarray:
         """Forward propagation.
 
         Args:
@@ -47,15 +47,13 @@ class Linear:
         Returns:
             computed linear layer output.
         """
-        print("w:")
-        print(self.w)
-        y = np.dot(x, self.w)
+        y = cpy.dot(x, self.w)
         if self.b is not None:
             y += self.b
         self.cache = dict(input=x)
         return y
 
-    def backward(self, grad: np.ndarray) -> np.ndarray:
+    def backward(self, grad: cpy.ndarray) -> cpy.ndarray:
         """Backward propagation.
 
         Args:
@@ -66,14 +64,14 @@ class Linear:
         """
         input = self.cache["input"]
         if len(grad.shape) == 3:
-            output_grad = np.dot(grad, self.w.T)
-            self.grad_w = np.sum(np.matmul(input.transpose(0, 2, 1), grad), axis=0)
+            output_grad = cpy.dot(grad, self.w.T)
+            self.grad_w = cpy.sum(cpy.matmul(input.transpose(0, 2, 1), grad), axis=0)
             if self.b is not None:
-                self.grad_b = np.sum(grad, axis=(0, 1))
+                self.grad_b = cpy.sum(grad, axis=(0, 1))
             return output_grad
         else:
-            output_grad = np.dot(grad, self.w.T)
-            self.grad_w = np.dot(input.T, grad)
+            output_grad = cpy.dot(grad, self.w.T)
+            self.grad_w = cpy.dot(input.T, grad)
             if self.b is not None:
                 self.grad_b = grad.sum(axis=0)
             return output_grad
@@ -93,7 +91,7 @@ class Linear:
         if self.b is not None:
             self.b = self.optimizer_b.update(self.grad_b, self.b)
 
-    def __call__(self, x: np.ndarray) -> np.ndarray:
+    def __call__(self, x: cpy.ndarray) -> cpy.ndarray:
         """Defining __call__ method to enable function like call.
 
         Args:
@@ -104,7 +102,7 @@ class Linear:
         """
         return self.forward(x)
 
-    def set_parameters_externally(self, w: np.ndarray, b: np.ndarray) -> None:
+    def set_parameters_externally(self, w: cpy.ndarray, b: cpy.ndarray) -> None:
         """Set parameters externally. used for testing.
 
         Args:
@@ -114,10 +112,17 @@ class Linear:
         self.w = w
         self.b = b
 
-    def get_grads(self) -> Tuple[np.ndarray, np.ndarray]:
+    def get_grads(self) -> Tuple[cpy.ndarray, cpy.ndarray]:
         """Access gradients.used for testing.
 
         Returns:
             returns gradients
         """
         return self.grad_w, self.grad_b
+    
+    def get_weights(self):
+        return {"w": cpy.asnumpy(self.w), "b": cpy.asnumpy(self.b)}
+
+    def set_weights(self, weights):
+        self.w = cpy.array(weights["w"])
+        self.b = cpy.array(weights["b"])

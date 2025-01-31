@@ -1,7 +1,7 @@
-import numpy as np
+import cupy as cpy
 
 
-def convert_image_to_patches(images: np.ndarray, num_patches_1d: int) -> np.ndarray:
+def convert_image_to_patches(images: cpy.ndarray, num_patches_1d: int) -> cpy.ndarray:
     """Convert image into patches.
 
     Args:
@@ -12,7 +12,7 @@ def convert_image_to_patches(images: np.ndarray, num_patches_1d: int) -> np.ndar
         images converted to patches.
     """
     n, c, h, w = images.shape
-    patches = np.zeros([n, num_patches_1d**2, h * w * c // (num_patches_1d**2)])
+    patches = cpy.zeros([n, num_patches_1d**2, h * w * c // (num_patches_1d**2)])
     patch_size = h // num_patches_1d
     for index, image in enumerate(images):
         for i in range(num_patches_1d):

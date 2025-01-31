@@ -1,13 +1,13 @@
 from abc import abstractmethod
 
-import numpy as np
+import cupy as cpy
 
 
 class Optimizer:
     """Optimizer."""
 
     @abstractmethod
-    def update(self, grad: np.ndarray, w: np.ndarray) -> None:
+    def update(self, grad: cpy.ndarray, w: cpy.ndarray) -> None:
         """Update weights based on gradient.
 
         Args:
@@ -27,7 +27,7 @@ class SGD(Optimizer):
         """
         self.learning_rate = learning_rate
 
-    def update(self, grad: np.ndarray, w: np.ndarray) -> np.ndarray:
+    def update(self, grad: cpy.ndarray, w: cpy.ndarray) -> cpy.ndarray:
         """Update weights based on gradient.
 
         Args:
@@ -62,7 +62,7 @@ class Adam(Optimizer):
         self.epsilon = epsilon
         self.t = 1
 
-    def update(self, grad: np.ndarray, w: np.ndarray) -> np.ndarray:
+    def update(self, grad: cpy.ndarray, w: cpy.ndarray) -> cpy.ndarray:
         """Update weights based on gradient.
 
         Args:
@@ -83,5 +83,5 @@ class Adam(Optimizer):
         rms_dw_corr = self.rms_dw / (1 - (self.beta2**self.t))
 
         # update weights
-        w = w - self.learning_rate * (m_dw_corr / (np.sqrt(rms_dw_corr) + self.epsilon))
+        w = w - self.learning_rate * (m_dw_corr / (cpy.sqrt(rms_dw_corr) + self.epsilon))
         return w

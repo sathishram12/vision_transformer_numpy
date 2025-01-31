@@ -1,6 +1,6 @@
 import copy
 
-import cupy as np
+import cupy as cpy
 from optimizer import Optimizer
 
 
@@ -12,13 +12,13 @@ class Parameter:
         self.val = val
         self.optimizer = None
 
-    def backward(self, grad: np.ndarray) -> None:
+    def backward(self, grad: cpy.ndarray) -> None:
         """Backward propagation.
 
         Args:
             grad: represents the gradient w.r.t. the output.
         """
-        self.cache = dict(grad=np.sum(grad, axis=0)[None, :])
+        self.cache = dict(grad=cpy.sum(grad, axis=0)[None, :])
 
     def set_optimizer(self, optimizer: Optimizer) -> None:
         """Set optimizer.

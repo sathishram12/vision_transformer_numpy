@@ -1,7 +1,7 @@
-import numpy as np
+import cupy as cpy
 
 
-def get_positional_embeddings(total_patches: int, dimension: int) -> np.ndarray:
+def get_positional_embeddings(total_patches: int, dimension: int) -> cpy.ndarray:
     """Create positional embeddings.
 
     Args:
@@ -11,12 +11,12 @@ def get_positional_embeddings(total_patches: int, dimension: int) -> np.ndarray:
     Returns:
         computed postion embedding.
     """
-    position_embedding = np.zeros([total_patches, dimension])
+    position_embedding = cpy.zeros([total_patches, dimension])
     for pos in range(total_patches):
         for i in range(dimension):
             position_embedding[pos][i] = (
-                np.sin(pos / (10000 ** (i / dimension)))
+                cpy.sin(pos / (10000 ** (i / dimension)))
                 if i % 2 == 0
-                else np.cos(pos / (10000 ** ((i - 1) / dimension)))
+                else cpy.cos(pos / (10000 ** ((i - 1) / dimension)))
             )
     return position_embedding
