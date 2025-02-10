@@ -20,6 +20,6 @@ The model trained in the code is currently not saved. Loss and metrics are provi
 
 ### Need to add/implement
 
-* [ ] Resolve bugs of overflow errors and occurance of nan values
-* [ ] save model weights
+* [x] Resolve bugs of overflow errors and occurance of nan values
+* [x] save model weights
 * [ ] unit tests
